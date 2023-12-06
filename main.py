@@ -11,9 +11,9 @@ print("starting")
 def main():
     while True:
         GPIO.output(4, GPIO.HIGH)
-        time.sleep(0.0012)
+        time.sleep(0.0006)
         GPIO.output(4, GPIO.LOW)
-        time.sleep(0.0012)
+        time.sleep(0.0006)
 
 
 if __name__ == "__main__":
