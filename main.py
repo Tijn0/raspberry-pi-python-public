@@ -1,17 +1,27 @@
 # SafeSafe: Secure Storage Solutions
 import threading
-import queue
+from queue import Queue
 import RPi.GPIO as GPIO
 import random
-import I2C_LCD_driver
+
+import _queue
+
+import code_handler
 import logging_manager
 import time
 import logging
-GPIO.setmode(GPIO.BCM)
+
+# local imports
+import display_manager
+import button
+import buzzer
+import firmware_handler
+import rotary_encoder
+import servo
 
 # pins configuration
-enc_a = 26  # s1
-enc_b = 19  # s2
+encoder_s1_pin = 26  # s1
+encoder_s2_pin = 19  # s2
 buzzer_pin = 5  # connected to buzzer +
 submit_button_pin = 21
 servo_pin = 18
@@ -30,495 +40,127 @@ access_granted_duration = 200    # milliseconds
 access_denied_frequency = 400    # Hz
 access_denied_duration = 300     # milliseconds
 
-custom_lcd_characters =[
-[  # left arrow
-    0b00000,
-    0b00100,
-    0b01100,
-    0b11111,
-    0b11111,
-    0b01100,
-    0b00100,
-    0b00000
-],
-[  # right arrow
-	0b00000,
-	0b00100,
-	0b00110,
-	0b11111,
-	0b11111,
-	0b00110,
-	0b00100,
-	0b00000
-]]
+# loop settings
+display_updater_interval = 0.05
+
+# GPIO setup
+GPIO.setmode(GPIO.BCM)
+#GPIO.setwarnings(False)
+
+# Queue setup
+queue = Queue()
+
+def current_milli_time():
+    return round(time.time() * 1000)
+
+def get_handlers():
+
+    buzzer_handler = buzzer.Buzzer(buzzer_pin, GPIO)
+    safe_code_handler = code_handler.SafeCode(safe_code_length)
+    display_handler = display_manager.Display()
+    rotary_encoder_handler = rotary_encoder.RotaryEncoder(encoder_s1_pin, encoder_s2_pin, GPIO, rotary_encoder_debounce_time)
+    servo_handler = servo.Servo(servo_pin, GPIO)
+    display_graphics_handler = display_manager.DisplayGraphics(display_handler, safe_code_length)
+    submit_button_handler = button.Button(submit_button_pin, GPIO, button_debounce_time)
+
+    return buzzer_handler, safe_code_handler, display_handler, rotary_encoder_handler, servo_handler, display_graphics_handler, submit_button_handler
 
 
-def setup_logging():
-    logging_manager.initialize_logger()
+def display_updater(cracked, display_handler, display_graphics_handler, safe_code_handler, rotary_encoder_handler):
+    progress_mode = False
+    last_millis = current_milli_time()
+    while True:
+        millis = current_milli_time()
+        if millis - last_millis > 500:
+            last_millis = millis
+
+        try:
+            task = queue.get(block=False)
 
 
-class DisplayGraphics:
+            if task == "progress_update":
+                progress_mode = True
+                user_code_length = safe_code_handler.user_code_length
+                current_direction = rotary_encoder_handler.current_direction
+                display_graphics_handler.display_code_progress(user_code_length, current_direction)
 
-    def __init__(self, display):
-        self.display = display
+            elif task == "access_denied":
+                progress_mode = False
+                display_handler.display_string("ACCESS DENIED")
 
-    def display_progress_bar(self, duration: int, row: int=2, column: int=0, clear_display_first: bool=False):
-        """
-        Displays a progress bar that'll fill up within a given time
-        :param duration: duration in seconds
-        :param row: numbered 1-2 (1: top row)
-        :param column: numbered 0-15 (0: first column)
-        :param clear_display_first: clears the display of content before displaying the progress bar
-        :return:
-        """
-        period = duration / 14
-
-        if clear_display_first:
-            self.display.clear_display()
-
-        for amount in range(1, 15):
-            bar = f"[{'='*amount}{(14-amount)*' '}]"
-            self.display.display_string(bar, row=row, column=column, clear_display_first=clear_display_first)
-            time.sleep(period)
-
-    def display_code_progress(self, user_code_length: int=0, direction: bool= False, row: int=2, column: int=0, clear_display_first: bool=False) -> None:
-        """
-        Prints a little graphic on the LCD that lets you see your progress on the code
-        :param user_code_length: how much of the code is already selected
-        :param direction: the direction (dial) in which the next number will be selected (True: right, False: left)
-        :param row: numbered 1-2 (1: top row)
-        :param column: numbered 0-15 (0: first column)
-        :param clear_display_first: clears the display of content before displaying the progress indicator
-        :return:
-        """
-        if user_code_length > safe_code_length:
-            return
-
-        progress_indicator = f"Code: [{user_code_length * '*'}{(safe_code_length - user_code_length) * '_'}]"
-        self.display.display_string(progress_indicator, row=row, column=column, clear_display_first=clear_display_first)
-        if direction:  # Right
-            self.display.display_right_arrow()
-        else: # Left
-            self.display.display_left_arrow()
+            elif task == "access_granted":
+                progress_mode = False
+                display_handler.display_string("ACCESS GRANTED")
 
 
-class Display:
-    def __init__(self):
-        self.lcd = I2C_LCD_driver.lcd()
-        self.lcd.lcd_load_custom_chars(custom_lcd_characters)
+            queue.task_done()
+
+        except _queue.Empty:
+            pass
+        finally:
+            time.sleep(display_updater_interval)
 
 
-    def display_string(self, string: str, row: int=1, column: int=0, clear_display_first: bool=True) -> None:
-        """
-        Displays a string on the display
-        :param string: the string to display
-        :param row: numbered 1-2 (1: top row)
-        :param column: numbered 0-15 (0: first column)
-        :param clear_display_first: clears the display of content before displaying the string
-        :return:
-        """
-        if clear_display_first:
-            self.clear_display()
+def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_handler):
+    firmware.startup_animation()
+    queue.put("progress_update")
+    last_selected_number = 0
+    idle_mode = True
+    while True:
 
-        self.lcd.lcd_display_string(string, row, column)
+        if idle_mode:
+            pass
 
-    def display_left_arrow(self):
-        self.lcd.lcd_write_char(0)
+        if rotary_encoder_handler.direction_changed_event():
+            firmware.on_rotary_encoder_direction_change()
+            queue.put("progress_update")
 
-    def display_right_arrow(self):
-        self.lcd.lcd_write_char(1)
-
-    def clear_display(self):
-        """
-        clears the display
-        :return:
-        """
-        self.lcd.lcd_clear()
-
-
-class RotaryEncoder:
-    def __init__(self):
-        GPIO.setup(enc_a, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(enc_b, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.add_event_detect(enc_a, GPIO.FALLING, callback=self.on_event, bouncetime=rotary_encoder_debounce_time)
-        self.selected_number = 0
-        self.selected_number_before_direction_changed = 0
-        self.current_direction = False
-        self.last_direction = False
-        self.last_selected_number = 0
-        self.distance_travelled_on_direction = 0
-        self.direction_changed_input = False
-
-
-    def on_event(self, event):
-        time.sleep(0.004)
-
-        switch_a = GPIO.input(enc_a)
-        switch_b = GPIO.input(enc_b)
-        logging.debug("ROTARY ENCODER event detected!")
-        if switch_a == 0 and switch_b == 1:  # Rotary encoder turned to the left
-            self.update_selected_number(False)
-            self.update_direction(False)
-
-        else:  # Rotary encoder turned to the right
-            self.update_selected_number(True)
-            self.update_direction(True)
-
-    def update_selected_number(self, direction: bool):
-        self.last_selected_number = self.selected_number
-        if direction:  # Rotary encoder turned to the right
-            if self.selected_number < 19:
-                self.selected_number += 1
+        if submit_button_handler.was_pressed():
+            selected_number = rotary_encoder_handler.selected_number
+            safe_code_handler.add_number_to_user_code(selected_number)
+            if safe_code_handler.is_user_code_correct():
+                firmware.access_granted()
             else:
-                self.selected_number = 0
+                firmware.access_denied()
 
-        else:  # Rotary encoder turned to the left
-            if self.selected_number > 0:
-                self.selected_number -= 1
-            else:
-                self.selected_number = 19
+        if rotary_encoder_handler.number_changed_event():
+            idle_mode = False
+            firmware.on_number_change()
+            selected_number = rotary_encoder_handler.selected_number
+            if safe_code_handler.is_correct_number(selected_number):
+                firmware.hovering_over_correct_number()
+            if safe_code_handler.current_safe_code_number == selected_number and safe_code_handler.current_safe_code_index == safe_code_length - 1:
+                if safe_code_handler.would_code_be_correct(selected_number):
+                    firmware.access_granted()
+                else:
+                    firmware.access_denied()
 
-        logging.debug(f"UPDATED selected nummer ({self.last_selected_number} -> {self.selected_number})")
+        # current_safe_code_number = safe_code.current_safe_code_number
+        # selected_number = rotary_encoder.selected_number
+        #if selected_number == current_safe_code_number and selected_number != last_selected_number:
+            #firmware.hovering_over_correct_number()
+        # if safe_code_handler.user_code_current_index == safe_code_length - 2:
+        # firmware.access_granted()
+        # last_selected_number = selected_number
 
-    def update_direction(self, direction: bool):
-        self.last_direction = self.current_direction
-        self.current_direction = direction
-
-        if self.direction_changed():
-
-            if direction:
-                direction_debug_string = "LEFT -> RIGHT"
-            else:
-                direction_debug_string = "RIGHT -> LEFT"
-
-            logging.debug(f"ROTARY ENCODER DIRECTION {direction_debug_string}")
-            self.direction_changed_input = True
-            self.distance_travelled_on_direction = 0
-        else:
-            self.distance_travelled_on_direction += 1
-
-
-
-
-    def direction_changed(self) -> bool:
-        if self.last_direction != self.current_direction:
-            self.selected_number_before_direction_changed = self.last_selected_number
-            return True  # Direction changed
-        else:
-            return False  # Direction didn't change
-
-    def direction_changed_event(self) -> bool:
-        if self.direction_changed_input:
-            self.direction_changed_input = False
-            return True
-        else:
-            return False
-
-
-class SafeSafeFirmware:
-    def __init__(self):
-        self.buzzer = Buzzer()
-        self.safe_code = SafeCode()
-        self.display = Display()
-        self.rotary_encoder = RotaryEncoder()
-        self.lock = Lock()
-
-    def startup_animation(self):
-
-        message = "Starting SafeSafe!"
-        dots = []
-        for i in range(0, 1):
-            [dots.append(i) for i in range(1, 4)]
-        self.display.display_string(f"SafeSafe OS", clear_display_first=True)
-        self.display.display_string(f"Booting", clear_display_first=False, row=2)
-        for amount in dots:
-            self.display.display_string(('.' * amount)+(3-amount)*" ", row=2, column=7, clear_display_first=False)
-            time.sleep(1)
-        self.display.clear_display()
-        #self.buzzer.play_jingle()
-
-    def access_granted(self):
-        self.display.display_string("ACCESS GRANTED")
-        self.buzzer.access_granted_tone()
-        self.safe_code.reset_progress()
-
-    def access_denied(self):
-        self.display.display_string("ACCESS DENIED")
-        self.buzzer.access_denied_tone()
-        self.safe_code.reset_progress()
-
-
-class SafeSafeCrackFirmware:
-    def __init__(self):
-        self.buzzer = Buzzer()
-        self.safe_code = SafeCode()
-        self.display = Display()
-        self.rotary_encoder = RotaryEncoder()
-        self.lock = Lock()
-
-    def startup_animation(self):
-        message = "Starting SafeSafe!"
-        dots = []
-        self.display.display_string(f">Injecting Crack", clear_display_first=True)
-        display_graphics = DisplayGraphics(self.display)
-        display_graphics.display_progress_bar(5)
-        self.display.display_string("SafeSafeCrack")
-        # for amount in dots:
-        # display.display_string(('.' * amount)+(3-amount)*" ", row=2, column=8, clear_display_first=False)
-        # time.sleep(1)
-        self.buzzer.play_jingle()
-
-    def access_granted(self):
-        self.display.display_string("ACCESS GRANTED")
-        self.buzzer.access_granted_tone()
-        self.safe_code.reset_progress()
-
-    def access_denied(self):
-        self.display.display_string("ACCESS DENIED")
-        self.buzzer.access_denied_tone()
-        self.safe_code.reset_progress()
-
-
-class Lock:
-    def __init__(self):
-        GPIO.setup(servo_pin, GPIO.OUT)
-        self.pwm = GPIO.PWM(servo_pin, 50)
-        self.pwm.start(0)
-        self.locked = True
-
-        self.lock()
-        time.sleep(1)
-        self.unlock()
-
-
-    def unlock(self):
-        GPIO.output(servo_pin, GPIO.HIGH)
-        self.pwm.ChangeDutyCycle(7.2)
-        time.sleep(1)
-        GPIO.output(servo_pin, GPIO.LOW)
-        self.pwm.ChangeDutyCycle(0)
-
-        self.locked = False
-
-
-    def lock(self):
-        GPIO.output(servo_pin, GPIO.HIGH)
-        self.pwm.ChangeDutyCycle(21.6)
-        time.sleep(1)
-        GPIO.output(servo_pin, GPIO.LOW)
-        self.pwm.ChangeDutyCycle(0)
-
-        self.locked = False
-
-
-class SafeCode:
-    def __init__(self):
-        self.user_code = []
-        self.user_code_current_index = 0
-        self.safe_code = self.generate_safe_code(self)
-        self.current_safe_code_index = 0
-        self.current_safe_code_number = self.safe_code[self.current_safe_code_index]
-
-    @staticmethod
-    def generate_safe_code(self) -> list:
-        logging.debug("Generating Safe Code!")
-        safe_code = []
-        amount_of_unique_digits = 0
-        while amount_of_unique_digits < safe_code_length:
-            safe_code = []
-            for i in range(0, safe_code_length):
-                random_integer = random.randint(1, 19)
-                safe_code.append(random_integer)
-            amount_of_unique_digits = len(set(safe_code))
-        logging.debug(f"Safe code: {safe_code}")
-        return safe_code
-
-    def next_digit(self):
-        last_digit = self.current_safe_code_number
-        max_allowed_index = safe_code_length - 1
-        if self.current_safe_code_index < max_allowed_index:
-            self.current_safe_code_index += 1
-        self.current_safe_code_number = self.safe_code[self.current_safe_code_index]
-
-        logging.debug(f"Safe Code next digit ({last_digit} -> {self.current_safe_code_number})")
-
-    def is_user_code_correct(self) -> bool:
-        user_code = self.user_code
-        safe_code = self.safe_code
-        if user_code == safe_code:
-            return True  # User code is correct
-        else:
-            return False  # User code isn't correct
-
-    def reset_progress(self) -> None:
-        self.current_safe_code_index = 0
-        self.current_safe_code_number = self.safe_code[0]
-        self.user_code = []
-        self.user_code_current_index = 0
-
-        logging.debug("User Code progress has been reset")
-
-    def add_number_to_user_code(self, number: int) -> None:
-        logging.debug(f"SafeCode: added number {number} to user guess")
-        self.user_code.append(number)
-        self.user_code_current_index += 1
-
-
-class Buzzer:
-    def __init__(self):
-        GPIO.setup(buzzer_pin, GPIO.OUT)
-        GPIO.output(buzzer_pin, GPIO.LOW)
-        self.state = False
-
-    def click_sound(self):
-        if self.state:
-            self.set_buzzer_state(False)
-        else:
-            self.set_buzzer_state(True)
-
-    def set_buzzer_state(self, state: bool):
-        GPIO.output(buzzer_pin, state)
-        self.state = state
-
-    def play_frequency(self, frequency: int, duration: float):
-        logging.debug(f"Buzzer at pin {buzzer_pin} Playing {frequency}Hz for {duration} seconds")
-        period = 1.0/frequency
-        amount_of_periods = duration/period
-        for period_number in range(round(amount_of_periods)):
-            self.set_buzzer_state(True)
-            time.sleep(period/2)
-            self.set_buzzer_state(False)
-            time.sleep(period/2)
-        self.state = False
-
-    def access_granted_tone(self):
-        frequency = access_granted_frequency
-        duration = access_granted_duration*0.001
-        self.play_frequency(frequency, duration)
-
-    def access_denied_tone(self):
-        frequency = access_denied_frequency
-        duration = access_denied_duration*0.001
-        self.play_frequency(frequency, duration)
-    def play_jingle(self):
-        safesafe_startup_jingle = [
-            {"frequency": 800, "duration": 0.2},
-            {"frequency": 1200, "duration": 0.4},
-            {"frequency": 1000, "duration": 0.2},
-            {"frequency": 1500, "duration": 0.4},
-            {"frequency": 1200, "duration": 0.2},
-            {"frequency": 1600, "duration": 0.4},
-            {"frequency": 1400, "duration": 0.2},
-            {"frequency": 2000, "duration": 0.4},
-            {"frequency": 1800, "duration": 0.2},
-        ]
-
-        for note_info in safesafe_startup_jingle:
-            note = note_info["frequency"]
-            duration = note_info["duration"]
-            period_duration = duration/note
-            amount_of_periods = round(duration/period_duration)
-            for period in range(amount_of_periods):
-                self.set_buzzer_state(True)
-                time.sleep(period_duration/2)
-                self.set_buzzer_state(False)
-                time.sleep(period_duration/2)
-            time.sleep(0.1)
-        self.state = False
-
-
-class Button:
-
-    def __init__(self, pin):
-        self.got_pressed = False
-        self.pin = pin
-        GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.add_event_detect(self.pin, GPIO.RISING, callback=self.on_event, bouncetime=button_debounce_time)
-
-    def on_event(self, event):
-        self.got_pressed = True
-
-    def was_pressed(self):
-        if self.got_pressed:
-            self.got_pressed = False
-            return True
-        else:
-            return False
-
-
-def get_firmware(cracked: bool):
-    """
-    Gets the SafeSafe firmware
-    :param cracked: Returns the cracked firmware if True
-    :return:
-    """
-    if cracked:
-        logging.info("Getting SafeSafeCrack Firmware")
-        return SafeSafeCrackFirmware()
-    else:
-        logging.info("Getting SafeSafe Firmware")
-        return SafeSafeFirmware()
+        time.sleep(0.02)
 
 
 def main():
+
+    cracked = False
+
     GPIO.setwarnings(False)
-    setup_logging()
+    logging_manager.initialize_logger()
     logging.info("started")
-    firmware = get_firmware(False)
-    rotary_encoder = firmware.rotary_encoder
-    safe_code = firmware.safe_code
-    buzzer = firmware.buzzer
+    buzzer_handler, safe_code_handler, display_handler, rotary_encoder_handler, servo_handler, display_graphics_handler, submit_button_handler = get_handlers()
 
-    display = firmware.display
-    display_graphics = DisplayGraphics(display)
+    firmware = firmware_handler.get_firmware(cracked, buzzer_handler, safe_code_handler, display_handler, rotary_encoder_handler, servo_handler, display_graphics_handler, queue)
 
-    firmware.startup_animation()
-
-    last_selected_number = 0
-    submit_button = Button(submit_button_pin)
-
-    display_graphics.display_code_progress()
-    while True:
-
-        if rotary_encoder.direction_changed_event():
-
-            selected_number = rotary_encoder.selected_number_before_direction_changed
-            logging.info(f"user chose {selected_number}")
-            user_code_handler.add_number(selected_number)
-            safe_code.next_digit()
-            user_code_length = user_code_handler.user_code_length
-            current_direction = rotary_encoder.current_direction
-            t1 = threading.Thread(target=display_graphics.display_code_progress, args=(user_code_length, current_direction))
-            t1.start()
-            #display_graphics.display_code_progress(user_code_length, current_direction)
-
-        if submit_button.was_pressed():
-            selected_number = rotary_encoder.selected_number
-            user_code_handler.add_number(selected_number)
-            if safe_code.is_user_code_correct():
-                logging.info("ACCESS GRANTED")
-                firmware.access_granted()
-            else:
-                logging.info("ACCESS DENIED")
-                firmware.access_denied()
-
-        current_safe_code_number = safe_code.current_safe_code_number
-        selected_number = rotary_encoder.selected_number
-
-        if selected_number != last_selected_number:
-            logging.info(f"Selected number: {selected_number}")
-
-
-        if selected_number == current_safe_code_number and selected_number != last_selected_number:
-            logging.info(f"CORRECT number selected {current_safe_code_number}")
-            buzzer.click_sound()
-            if user_code_handler.user_code_length == safe_code_length - 1:
-                logging.info("ACCESS GRANTED")
-                firmware.access_granted()
-
-
-        last_selected_number = selected_number
-        time.sleep(0.02)
+    thread_1 = threading.Thread(target=mainloop, args=(firmware, rotary_encoder_handler, submit_button_handler, safe_code_handler))
+    thread_2 = threading.Thread(target=display_updater, args=(cracked, display_handler, display_graphics_handler, safe_code_handler, rotary_encoder_handler))
+    thread_1.start()
+    thread_2.start()
 
 
 if __name__ == "__main__":
