@@ -18,6 +18,7 @@ import buzzer
 import firmware_handler
 import rotary_encoder
 import servo
+from subprocess import call
 
 # pins configuration
 encoder_s1_pin = 26  # s1
@@ -164,6 +165,9 @@ def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_
             queue.put("shutdown")
             firmware.buzzer.shutdown_tone()
             firmware.lock.unlock()
+            GPIO.cleanup()
+            call("sudo poweroff", shell=True)
+
 
 
         # current_safe_code_number = safe_code.current_safe_code_number
