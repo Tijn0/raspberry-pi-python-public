@@ -146,7 +146,7 @@ def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_
             if safe_code_handler.current_safe_code_number == selected_number and safe_code_handler.current_safe_code_index == safe_code_length - 1:
                 if safe_code_handler.would_code_be_correct(selected_number):
                     firmware.access_granted()
-
+                    door_lock_button.got_pressed = False
                     while not door_lock_button.was_pressed():
                         time.sleep(0.05)
 
