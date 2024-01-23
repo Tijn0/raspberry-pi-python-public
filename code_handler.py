@@ -25,7 +25,7 @@ class SafeCode:
         logging.debug(f"Safe code: {safe_code}")
         return safe_code
 
-    def next_digit(self):
+    def next_digit(self) -> None:
         last_digit = self.current_safe_code_number
         max_allowed_index = self.safe_code_length - 1
         if self.current_safe_code_index < max_allowed_index:

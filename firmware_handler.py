@@ -47,6 +47,11 @@ class SafeSafeFirmware:
         self.safe_code.reset_progress()
         self.lock.unlock()
 
+    def generate_new_safe_code(self):
+        self.safe_code.reset_progress()
+        self.safe_code.safe_code = self.safe_code.generate_safe_code()
+        self.safe_code.reset_progress()
+
     def access_denied(self):
         logging.info("ACCESS DENIED")
         self.queue.put("access_denied")

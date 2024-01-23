@@ -9,6 +9,10 @@ access_granted_duration = 400    # milliseconds
 access_denied_frequency = 400    # Hz
 access_denied_duration = 300     # milliseconds
 
+shutdown_tone_frequency = 200    # Hz
+shutdown_tone_duration = 1000    # milliseconds
+
+
 class Buzzer:
     def __init__(self, pin, GPIO):
         self.GPIO = GPIO
@@ -47,6 +51,12 @@ class Buzzer:
         frequency = access_denied_frequency
         duration = access_denied_duration*0.001
         self.play_frequency(frequency, duration)
+
+    def shutdown_tone(self):
+        frequency = shutdown_tone_frequency
+        duration = shutdown_tone_duration*0.001
+        self.play_frequency(frequency, duration)
+
 
     def play_jingle(self):
         safesafe_startup_jingle = [

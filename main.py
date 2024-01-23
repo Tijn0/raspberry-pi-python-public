@@ -24,7 +24,8 @@ encoder_s1_pin = 26  # s1
 encoder_s2_pin = 19  # s2
 buzzer_pin = 5  # connected to buzzer +
 submit_button_pin = 21
-servo_pin = 18
+servo_pin = 17
+door_lock_button_pin = 13
 
 # debounce stuff
 button_debounce_time = 100  # milliseconds
@@ -41,7 +42,7 @@ access_denied_frequency = 400    # Hz
 access_denied_duration = 300     # milliseconds
 
 # loop settings
-display_updater_interval = 0.05
+display_updater_interval = 0.10
 
 # GPIO setup
 GPIO.setmode(GPIO.BCM)
@@ -92,8 +93,18 @@ def display_updater(cracked, display_handler, display_graphics_handler, safe_cod
                 progress_mode = False
                 display_handler.display_string("ACCESS GRANTED")
 
+            elif task == "clear_display":
+                progress_mode = False
+                display_handler.clear_display()
+
+            elif task == "shutdown":
+                progress_mode = False
+                display_handler.clear_display()
+                display_handler.display_string("AAN HET")
+                display_handler.display_string(string="AFSLUITEN", clear_display_first=False, row=2)
 
             queue.task_done()
+
 
         except _queue.Empty:
             pass
@@ -101,11 +112,13 @@ def display_updater(cracked, display_handler, display_graphics_handler, safe_cod
             time.sleep(display_updater_interval)
 
 
+
 def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_handler):
     firmware.startup_animation()
     queue.put("progress_update")
     last_selected_number = 0
     idle_mode = True
+    door_lock_button = button.Button(door_lock_button_pin, GPIO, button_debounce_time)
     while True:
 
         if idle_mode:
@@ -132,18 +145,35 @@ def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_
             if safe_code_handler.current_safe_code_number == selected_number and safe_code_handler.current_safe_code_index == safe_code_length - 1:
                 if safe_code_handler.would_code_be_correct(selected_number):
                     firmware.access_granted()
+
+                    while not door_lock_button.was_pressed():
+                        time.sleep(0.05)
+
+                    firmware.lock.lock()
+                    firmware.generate_new_safe_code()
+                    queue.put("clear_display")
+                    queue.put("progress_update")
+
                 else:
                     firmware.access_denied()
+                    time.sleep(1)
+                    queue.put("clear_display")
+                    queue.put("progress_update")
+
+        if door_lock_button.was_held_down():
+            queue.put("shutdown")
+            firmware.buzzer.shutdown_tone()
+            firmware.lock.unlock()
+
 
         # current_safe_code_number = safe_code.current_safe_code_number
         # selected_number = rotary_encoder.selected_number
-        #if selected_number == current_safe_code_number and selected_number != last_selected_number:
-            #firmware.hovering_over_correct_number()
+        # if selected_number == current_safe_code_number and selected_number != last_selected_number:
+        # firmware.hovering_over_correct_number()
         # if safe_code_handler.user_code_current_index == safe_code_length - 2:
         # firmware.access_granted()
         # last_selected_number = selected_number
-
-        time.sleep(0.02)
+        time.sleep(0.04)
 
 
 def main():
