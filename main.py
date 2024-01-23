@@ -177,12 +177,11 @@ def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_
 
 
 def main():
-    logging.info("OPGESTART")
     cracked = False
 
     GPIO.setwarnings(False)
     logging_manager.initialize_logger()
-    logging.info("started")
+    logging.info("OPGESTART")
     buzzer_handler, safe_code_handler, display_handler, rotary_encoder_handler, servo_handler, display_graphics_handler, submit_button_handler = get_handlers()
 
     firmware = firmware_handler.get_firmware(cracked, buzzer_handler, safe_code_handler, display_handler, rotary_encoder_handler, servo_handler, display_graphics_handler, queue)
