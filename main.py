@@ -177,7 +177,7 @@ def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_
 
 
 def main():
-    print("LOL")
+    logging.info("OPGESTART")
     cracked = False
 
     GPIO.setwarnings(False)
