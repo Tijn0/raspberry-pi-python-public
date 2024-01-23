@@ -16,7 +16,6 @@ class Button:
         held_down_time = 0
         while not self.GPIO.input(self.pin):
             held_down_time += 1
-            print(held_down_time)
             time.sleep(0.02)
             if held_down_time > 50:
                 logging.info(f"Button at pin {self.pin} got long pressed")
