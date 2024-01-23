@@ -9,11 +9,10 @@ class Servo:
         self.servo_pin = servo_pin
         self.pwm = GPIO.PWM(servo_pin, 50)
         self.pwm.start(0)
-        self.locked = True
+        self.locked = False
 
         self.unlock()
         time.sleep(1)
-        self.lock()
 
     def lock(self):
         if not self.locked:

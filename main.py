@@ -104,6 +104,11 @@ def display_updater(cracked, display_handler, display_graphics_handler, safe_cod
                 display_handler.display_string("AAN HET")
                 display_handler.display_string(string="AFSLUITEN", clear_display_first=False, row=2)
 
+            elif task == "door_close_message":
+                progress_mode = False
+                display_handler.display_string("1. Sluit deur")
+                display_handler.display_string(string="2. Druk op codewiel", clear_display_first=False, row=2)
+
             queue.task_done()
 
 
@@ -116,10 +121,20 @@ def display_updater(cracked, display_handler, display_graphics_handler, safe_cod
 
 def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_handler):
     firmware.startup_animation()
-    queue.put("progress_update")
+    queue.put("door_close_message")
     last_selected_number = 0
     idle_mode = True
     door_lock_button = button.Button(door_lock_button_pin, GPIO, button_debounce_time)
+
+
+    # user needs to close door and press button for it to lock
+    while not door_lock_button.was_pressed():
+        time.sleep(0.05)
+
+    firmware.lock.lock()
+
+    queue.put("progress_update")
+
     while True:
 
         if idle_mode:
