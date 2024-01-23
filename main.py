@@ -107,7 +107,7 @@ def display_updater(cracked, display_handler, display_graphics_handler, safe_cod
             elif task == "door_close_message":
                 progress_mode = False
                 display_handler.display_string("1. Sluit deur")
-                display_handler.display_string(string="2. Druk op codewiel", clear_display_first=False, row=2)
+                display_handler.display_string(string="2. Druk wiel in", clear_display_first=False, row=2)
 
             queue.task_done()
 
