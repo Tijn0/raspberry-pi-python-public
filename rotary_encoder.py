@@ -88,3 +88,10 @@ class RotaryEncoder:
         else:
             return False
 
+    def reset_direction(self) -> None:
+        self.current_direction = False
+        self.last_direction = False
+        self.direction_changed_input = False
+        self.number_changed_input = False
+        self.distance_travelled_on_direction = 0
+

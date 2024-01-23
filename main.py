@@ -132,7 +132,7 @@ def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_
         time.sleep(0.05)
 
     firmware.lock.lock()
-
+    queue.put("clear_display")
     queue.put("progress_update")
 
     while True:
@@ -183,7 +183,13 @@ def mainloop(firmware, rotary_encoder_handler, submit_button_handler, safe_code_
             GPIO.cleanup()
             call("sudo poweroff", shell=True)
 
-
+        if door_lock_button.was_pressed():
+            firmware.buzzer.shutdown_tone()
+            firmware.safe_code.reset_progress()
+            firmware.rotary_encoder.reset_direction()
+            time.sleep(1)
+            queue.put("clear_display")
+            queue.put("progress_update")
 
         # current_safe_code_number = safe_code.current_safe_code_number
         # selected_number = rotary_encoder.selected_number
