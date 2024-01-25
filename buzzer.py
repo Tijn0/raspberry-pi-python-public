@@ -21,17 +21,17 @@ class Buzzer:
         GPIO.output(pin, GPIO.LOW)
         self.state = False
 
-    def click_sound(self):
+    def click_sound(self) -> None:
         if self.state:
             self.set_buzzer_state(False)
         else:
             self.set_buzzer_state(True)
 
-    def set_buzzer_state(self, state: bool):
+    def set_buzzer_state(self, state: bool) -> None:
         self.GPIO.output(self.pin, state)
         self.state = state
 
-    def play_frequency(self, frequency: int, duration: float):
+    def play_frequency(self, frequency: int, duration: float) -> None:
         logging.debug(f"Buzzer at pin {self.pin} Playing {frequency}Hz for {duration} seconds")
         period = 1.0/frequency
         amount_of_periods = duration/period
@@ -42,23 +42,23 @@ class Buzzer:
             time.sleep(period/2)
         self.state = False
 
-    def access_granted_tone(self):
+    def access_granted_tone(self) -> None:
         frequency = access_granted_frequency
         duration = access_granted_duration*0.001
         self.play_frequency(frequency, duration)
 
-    def access_denied_tone(self):
+    def access_denied_tone(self) -> None:
         frequency = access_denied_frequency
         duration = access_denied_duration*0.001
         self.play_frequency(frequency, duration)
 
-    def shutdown_tone(self):
+    def shutdown_tone(self) -> None:
         frequency = shutdown_tone_frequency
         duration = shutdown_tone_duration*0.001
         self.play_frequency(frequency, duration)
 
 
-    def play_jingle(self):
+    def play_jingle(self) -> None:
         safesafe_startup_jingle = [
             {"frequency": 800, "duration": 0.2},
             {"frequency": 1200, "duration": 0.4},

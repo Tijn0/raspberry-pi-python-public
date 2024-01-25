@@ -19,7 +19,7 @@ class RotaryEncoder:
         self.direction_changed_input = False
         self.number_changed_input = False
 
-    def on_event(self, event):
+    def on_event(self, event) -> None:
         time.sleep(0.004)
 
         switch_a = self.GPIO.input(self.encoder_s1_pin)
@@ -33,7 +33,7 @@ class RotaryEncoder:
             self.update_selected_number(True)
             self.update_direction(True)
 
-    def update_selected_number(self, direction: bool):
+    def update_selected_number(self, direction: bool) -> None:
         self.last_selected_number = self.selected_number
         if direction:  # Rotary encoder turned to the right
             if self.selected_number < 19:
@@ -49,7 +49,7 @@ class RotaryEncoder:
         self.number_changed_input = True
         logging.debug(f"UPDATED selected nummer ({self.last_selected_number} -> {self.selected_number})")
 
-    def update_direction(self, direction: bool):
+    def update_direction(self, direction: bool) -> None:
         self.last_direction = self.current_direction
         self.current_direction = direction
 

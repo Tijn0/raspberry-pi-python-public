@@ -89,13 +89,13 @@ class Display:
 
         self.lcd.lcd_display_string(string, row, column)
 
-    def display_left_arrow(self):
+    def display_left_arrow(self) -> None:
         self.lcd.lcd_write_char(0)
 
-    def display_right_arrow(self):
+    def display_right_arrow(self) -> None:
         self.lcd.lcd_write_char(1)
 
-    def clear_display(self):
+    def clear_display(self) -> None:
         """
         clears the display
         :return:

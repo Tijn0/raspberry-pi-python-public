@@ -28,7 +28,7 @@ class CustomFormatter(logging.Formatter):
         formatter = logging.Formatter(log_fmt)
         return formatter.format(record)
 
-def initialize_logger():
+def initialize_logger() -> None:
     format = '%(asctime)s [%(levelname)s]  %(message)s'
     log_file_name = "latest.log"
     #logging.getLogger("discord").setLevel(logging.WARNING)

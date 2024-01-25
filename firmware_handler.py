@@ -26,7 +26,7 @@ class SafeSafeFirmware:
         self.lock = lock
         self.display_graphics = display_graphics
 
-    def startup_animation(self):
+    def startup_animation(self) -> None:
 
         message = "Starting SafeSafe!"
         dots = []
@@ -40,34 +40,33 @@ class SafeSafeFirmware:
         self.display.clear_display()
         #self.buzzer.play_jingle()
 
-    def access_granted(self):
+    def access_granted(self) -> None:
         logging.info("ACCESS GRANTED")
         self.queue.put("access_granted")
         self.buzzer.access_granted_tone()
         self.safe_code.reset_progress()
         self.lock.unlock()
 
-    def generate_new_safe_code(self):
+    def generate_new_safe_code(self) -> None:
         self.safe_code.reset_progress()
         self.safe_code.safe_code = self.safe_code.generate_safe_code()
         self.safe_code.reset_progress()
 
-    def access_denied(self):
+    def access_denied(self) -> None:
         logging.info("ACCESS DENIED")
         self.queue.put("access_denied")
         self.buzzer.access_denied_tone()
         self.safe_code.reset_progress()
 
-    def hovering_over_correct_number(self):
+    def hovering_over_correct_number(self) -> None:
         logging.info(f"CORRECT number selected {self.safe_code.current_safe_code_number}")
         self.buzzer.click_sound()
-        pass
 
-    def on_number_change(self):
+    def on_number_change(self) -> None:
         selected_number = self.rotary_encoder.selected_number
         logging.info(f"Selected number: {selected_number}")
 
-    def on_rotary_encoder_direction_change(self):
+    def on_rotary_encoder_direction_change(self) -> None:
         selected_number = self.rotary_encoder.selected_number_before_direction_changed
         logging.info(f"user chose {selected_number}")
         self.safe_code.add_number_to_user_code(selected_number)
@@ -83,7 +82,7 @@ class SafeSafeCrackFirmware:
         self.lock = lock
         self.display_graphics = display_graphics
 
-    def startup_animation(self):
+    def startup_animation(self) -> None:
         message = "Starting SafeSafe!"
         dots = []
         self.display.display_string(f">Injecting Crack", clear_display_first=True)
@@ -94,28 +93,28 @@ class SafeSafeCrackFirmware:
         # time.sleep(1)
         #self.buzzer.play_jingle()
 
-    def access_granted(self):
+    def access_granted(self) -> None:
         logging.info("ACCESS GRANTED")
         self.queue.put("access_granted")
         self.buzzer.access_granted_tone()
         self.safe_code.reset_progress()
         self.lock.unlock()
 
-    def access_denied(self):
+    def access_denied(self) -> None:
         logging.info("ACCESS DENIED")
         self.queue.put("access_denied")
         self.buzzer.access_denied_tone()
         self.safe_code.reset_progress()
 
-    def hovering_over_correct_number(self):
+    def hovering_over_correct_number(self) -> None:
         logging.info(f"CORRECT number selected {self.safe_code.current_safe_code_number}")
         self.buzzer.click_sound()
 
-    def on_number_change(self):
+    def on_number_change(self) -> None:
         selected_number = self.rotary_encoder.selected_number
         logging.info(f"Selected number: {selected_number}")
 
-    def on_rotary_encoder_direction_change(self):
+    def on_rotary_encoder_direction_change(self) -> None:
         selected_number = self.rotary_encoder.selected_number_before_direction_changed
         logging.info(f"user chose {selected_number}")
         self.safe_code.add_number_to_user_code(selected_number)

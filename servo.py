@@ -14,7 +14,7 @@ class Servo:
         self.unlock()
         time.sleep(1)
 
-    def lock(self):
+    def lock(self) -> None:
         if not self.locked:
             self.GPIO.output(self.servo_pin, self.GPIO.HIGH)
             self.pwm.ChangeDutyCycle(7.2)
@@ -26,7 +26,7 @@ class Servo:
         else:
             logging.warning("SAFE IS ALREADY LOCKED")
 
-    def unlock(self):
+    def unlock(self) -> None:
         if self.locked:
             self.GPIO.output(self.servo_pin, self.GPIO.HIGH)
             self.pwm.ChangeDutyCycle(21.6)
